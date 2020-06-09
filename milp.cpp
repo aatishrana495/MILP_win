@@ -306,10 +306,14 @@ pair<vector<double>, double> Milp::simplex(){
 void Milp::update_inputs(){
   n = atoi(ui->variable_input->text().toStdString().c_str());
   m = atoi(ui->constraints_input->text().toStdString().c_str());
+  ui->variable_label->setText(ui->variable_input->text());
+  ui->constraints_label->setText(ui->constraints_input->text());
 }
 
 void Milp::reset_inputs(){
   n = m = 0;
+  ui->variable_label->setText(ui->variable_input->text());
+  ui->constraints_label->setText(ui->constraints_input->text());
 }
 
 void Milp::reset_line_edits(){
