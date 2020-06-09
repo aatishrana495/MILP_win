@@ -16,6 +16,7 @@
 #include <map>
 #include <complex>
 #include <QMainWindow>
+#include <QApplication>
 
 #include <ui_milp.h>
 

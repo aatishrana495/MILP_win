@@ -28,6 +28,7 @@
 
 Milp::Milp(QWidget *parent)
     : QMainWindow(parent), ui(new Ui::Milp){
+      printf("gi");
       ui->setupUi(this);
       // initialise variables
       n = m = 0;
