@@ -23,8 +23,7 @@
 #define MAX_N 1001
 #define MAX_M 1001
 
-typedef long long lld;
-typedef unsigned long long llu;
+
 using namespace std;
 
 #define EPS 1E-9
@@ -62,39 +61,39 @@ private:
   double obj;
   int unbounded;
 
-  void canonicalize ( vector <vector <double> > & A,
-              vector <double>& B,
-              vector <double>& C,
-              vector <int>& BasicVarR,   // basic variable of each row
-              double & obj                // objective value
+  void canonicalize ( vector <vector <double> > & ,
+              vector <double>& ,
+              vector <double>& ,
+              vector <int>& ,
+              double &
               );
 
 
-  bool pivoting ( vector <vector <double> > & A,
-          vector <double>& B,
-          vector <double>& C,
-          vector <int>& BasicVarR,   // basic variable of each row
-          double & obj                // objective value
+  bool pivoting ( vector <vector <double> > & ,
+          vector <double>& ,
+          vector <double>& ,
+          vector <int>& ,
+          double &
           );
 
-  void LU_solver ( vector <vector <double> > & A, // matrix A
-           vector <double>& B,           // b
-           vector <double>& X            // x
+  void LuSolver ( vector <vector <double> > & ,
+           vector <double>& ,
+           vector <double>&
            );
 
-  int preprocess ( vector <vector <double> > & A,     // constraint matrix
-           vector <double>& B,               // right hand side
-           vector <double>& X                // unknowns
+  int preprocess ( vector <vector <double> > & ,
+           vector <double>& ,
+           vector <double>&
            );
 
-  int simplex ( const vector <vector <double> > & A,  // constraint matrix
-            const vector <double>& B,            // right hand side
-            const vector <double>& C,            // objective vector
-            vector <double>& X,                  // unknowns
-            double & obj                          // objective value
+  int simplex ( const vector <vector <double> > & ,
+            const vector <double>& ,
+            const vector <double>& ,
+            vector <double>& ,
+            double &
             );
 
-  inline int identity_col (const vector <vector <double> > & A, int c) {
+  inline int column_identity (const vector <vector <double> > & A, int c) {
     int count = 0, row;
     for (int r=0; r<A.size(); r++)
       if (A[r][c] > EPS) { count++; row = r; }

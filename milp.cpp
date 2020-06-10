@@ -1,30 +1,7 @@
 #include "milp.h"
 #include "ui_milp.h"
 #include <QApplication>
-/*
- The Simplex algorithm aims to solve a linear program - optimising a linear function subject
- to linear constraints. As such it is useful for a very wide range of applications.
 
- N.B. The linear program has to be given in *slack form*, which is as follows:
- maximise
-     c_1 * x_1 + c_2 * x_2 + ... + c_n * x_n + v
- subj. to
-     a_11 * x_1 + a_12 * x_2 + ... + a_1n * x_n + b_1 = s_1
-     a_21 * x_1 + a_22 * x_2 + ... + a_2n * x_n + b_2 = s_2
-     ...
-     a_m1 * x_1 + a_m2 * x_2 + ... + a_mn * x_n + b_m = s_m
- and
-     x_1, x_2, ..., x_n, s_1, s_2, ..., s_m >= 0
-
- Every linear program can be translated into slack form; the parameters to specify are:
-     - the number of variables, n, and the number of constraints, m;
-     - the matrix A = [[A_11, A_12, ..., A_1n], ..., [A_m1, A_m2, ..., A_mn]];
-     - the vector b = [b_1, b_2, ..., b_m];
-     - the vector c = [c_1, c_2, ..., c_n] and the constant v.
-
- Complexity:    O(m^(n/2)) worst case
-                O(n + m) average case (common)
-*/
 
 Milp::Milp(QWidget *parent)
     : QMainWindow(parent), ui(new Ui::Milp){
@@ -51,13 +28,13 @@ Milp::~Milp(){}
 void Milp::canonicalize ( vector <vector <double> > & A,
             vector <double>& B,
             vector <double>& C,
-            vector <int>& BasicVarR,   // basic variable of each row
-            double & obj                // objective value
+            vector <int>& var_r,
+            double & obj
             )
 {
   int m = A.size(), n = C.size();
   for (int r=0; r<m; r++) {
-    int bc = BasicVarR[r];          // col. that the basic variable is in
+    int bc = var_r[r];
     if ( fabs(A[r][bc] - 1.0) > EPS) {
       double p = A[r][bc];
       for (int c=0; c<n; c++) A[r][c] /= p;
@@ -74,18 +51,18 @@ void Milp::canonicalize ( vector <vector <double> > & A,
 bool Milp::pivoting ( vector <vector <double> > & A,
         vector <double>& B,
         vector <double>& C,
-        vector <int>& BasicVarR,   // basic variable of each row
-        double & obj                // objective value
+        vector <int>& var_r,
+        double & obj
         )
 {
   int m = A.size(), n = C.size();
  while (1) {
-    int ev = 0;                    // id of the entering variable
+    int ev = 0;                    // entering variable id
     for (ev=0; ev<n; ev++)
       if (C[ev] < -EPS) break;
 
     if (ev == n) break;           // optimum reached.
-          int lvr = -1;                  // leaving variable, id'ed by row
+          int lvr = -1;                  // leaving variable
     double minRatio;
     for (int r=0; r<m; r++) {
       if (A[r][ev] > EPS) {
@@ -95,8 +72,8 @@ bool Milp::pivoting ( vector <vector <double> > & A,
       }
     }
     if (lvr < 0) return true;      // unbounded
-    int lv = BasicVarR[lvr];       // leaving variable
-    BasicVarR[lvr] = ev;
+    int lv = var_r[lvr];       // leaving variable
+    var_r[lvr] = ev;
     double p = A[lvr][ev];
     for (int c=0; c<n; c++) A[lvr][c] /= p; B[lvr] /= p;
     for (int r=0; r<m; r++) {
@@ -124,7 +101,7 @@ bool Milp::pivoting ( vector <vector <double> > & A,
 }
 
 
-void Milp::LU_solver ( vector <vector <double> > & A, // matrix A
+void Milp::LuSolver ( vector <vector <double> > & A, // matrix A
          vector <double>& B,           // b
          vector <double>& X            // x
          )
@@ -138,13 +115,13 @@ vector <vector <double> > L ( n, vector<double> (n) );
     L[i][i] = 1.0; // diagonals of L are 1's
   copy ( A[0].begin(), A[0].end(), U[0].begin() );
    for (int k=0; k<n-1; k++) {
-    for (int i=k+1; i<n; i++) { // compute the k'th column of L
+    for (int i=k+1; i<n; i++) {
       double t = A[i][k];
       for (int j=0; j<k; j++)
     t -= ( L[i][j] * U[j][k] );
       L[i][k] = t / U[k][k];
     }
-    for (int j=k+1; j<n; j++) { // compute the (k+1)'s row of U
+    for (int j=k+1; j<n; j++) {
       double t = A[k+1][j];
       for (int i=0; i<k+1; i++)
     t -= ( L[k+1][i] * U[i][j] );
@@ -171,18 +148,18 @@ int Milp::preprocess ( vector <vector <double> > & A,     // constraint matrix
 {
   int m = A.size ();                 // # of constraints
   int n = A[0].size ();              // # of variables
-  vector <bool> IsRedundant (m, false);  // flags for redundant constraint
+  vector <bool> is_redundant (m, false);  // flags for redundant constraint
   for (int r=0; r<m; r++) {
     bool allZero = true;
     for (int c=0; c<n; c++)
       if (fabs(A[r][c]) > EPS) { allZero = false; break; }
     if (allZero) {
       if (fabs(B[r]) > EPS) return -1;
-      else IsRedundant[r] = true;
+      else is_redundant[r] = true;
     }
   }
-  for (int i=0; i<m; i++) if (!IsRedundant[i]) {
-    for (int j=i+1; j<m; j++) if (!IsRedundant[j]) {
+  for (int i=0; i<m; i++) if (!is_redundant[i]) {
+    for (int j=i+1; j<m; j++) if (!is_redundant[j]) {
       int c;
       double ratio = 0.0;
             for (c=0; c<n; c++) {
@@ -202,24 +179,24 @@ int Milp::preprocess ( vector <vector <double> > & A,     // constraint matrix
       }  if (c == n) {
     if ( fabs(B[i]) < EPS && fabs(B[j]) < EPS ||
          fabs(B[j]) > EPS && fabs (B[i]/B[j] - ratio) < EPS )
-      IsRedundant[j] = true;
+      is_redundant[j] = true;
     else return -1;              // inconsistency detected
       }
     }
   }
   int r;
   for (int c=0; c<n; c++)
-     r = identity_col (A, c);
+     r = column_identity (A, c);
 if(r==-1)
 count==0;
 else
 count==1;
 
-  int numRedundancies = count;
-  if (numRedundancies > 0) {
-    int ir = 0;                      // 1 position to the right of the new A
+  int redundancies = count;
+  if (redundancies > 0) {
+    int ir = 0;
     for (int i=0; i<m; i++) {
-      if (!IsRedundant[i]) {
+      if (!is_redundant[i]) {
     if (ir < i) {                // overiding
       copy (A[i].begin(), A[i].end(), A[ir].begin());
       B[ir] = B[i];
@@ -227,13 +204,13 @@ count==1;
     ir++;
       }
     }
-    for (int i=0; i<numRedundancies; i++) {
+    for (int i=0; i<redundancies; i++) {
       A.erase (A.end()-1);
       B.erase (B.end()-1);
     }
   }
- m -= numRedundancies;
-  if (m >= n) {                      // determined or overdetermined system
+ m -= redundancies;
+  if (m >= n) {
     vector <vector <double> > A0 (n, vector<double> (n));
     vector <double> B0 (n);
     for (int r=0; r<n; r++) {
@@ -241,7 +218,7 @@ count==1;
       B0[r] = B[r];
     }
 
-    LU_solver (A0, B0, X);
+    LuSolver (A0, B0, X);
     bool nonNegative = true;
     for (int c=0; c<n; c++)
       if (X[c] < 0) { nonNegative = false; break; }
@@ -252,28 +229,28 @@ count==1;
       double lhs = 0.0;
       for (int c=0; c<n; c++)
     lhs += A[r][c] * X[c];
-      if ( fabs (lhs - B[r]) > EPS ) { // constraint c not satisfied
+      if ( fabs (lhs - B[r]) > EPS ) { // unsatisfied constraint c
     consistent = false;
     break;
       }
     }
     return (consistent ? -2 : -1);
   }
-        return numRedundancies;
+        return redundancies;
 }
 
 
-int Milp::simplex ( const vector <vector <double> > & A,  // constraint matrix
-          const vector <double>& B,            // right hand side
-          const vector <double>& C,            // objective vector
-          vector <double>& X,                  // unknowns
-          double & obj                          // objective value
+int Milp::simplex ( const vector <vector <double> > & A,
+          const vector <double>& B,
+          const vector <double>& C,
+          vector <double>& X,
+          double & obj
           )
 {
-  int m = A.size();                  // # of inequalities
-  int n = A[0].size();               // # of variables
+  int m = A.size();
+  int n = A[0].size();
   if (!m || m != B.size() || n != C.size()) {
-    cout << "Wrong inputs!\n"; exit(1);
+     exit(1);
   }
   if (X.size() != n) X.resize(n);
   fill (X.begin(), X.end(), 0);
@@ -283,25 +260,25 @@ int Milp::simplex ( const vector <vector <double> > & A,  // constraint matrix
     copy (A[r].begin(), A[r].end(), A0[r].begin() );
   copy ( B.begin(), B.end(), B0.begin() );
   int ret_val = preprocess (A0, B0, X);
-  int numRedundancies;
-  if (ret_val == -1)                 // inconsistent system
+  int redundancies;
+  if (ret_val == -1)
     return -1;
-  else if (ret_val == -2)            // solved
+  else if (ret_val == -2)
     return 1;
-  else                               // need to run Simplex
-    numRedundancies = ret_val;
+  else
+    redundancies = ret_val;
 
-  m = A0.size ();                    // size changes after redundancy removal
- vector <bool> IsBasic (n, false);  // bit flag for basic variables
-  vector <int> BasicVarR (m, -1);    // basic variable of each row
-  int numBasicVar = 0;
+  m = A0.size ();
+ vector <bool> is_basic (n, false);
+  vector <int> var_r (m, -1);
+  int num_var_basic = 0;
   for (int c=0; c<n; c++) {
-    int r = identity_col (A, c);
+    int r = column_identity (A, c);
 
-    if (r >= 0 && BasicVarR[r] < 0) {
-      IsBasic[c] = true;
-      BasicVarR[r] = c;
-      numBasicVar++;
+    if (r >= 0 && var_r[r] < 0) {
+      is_basic[c] = true;
+      var_r[r] = c;
+      num_var_basic++;
     }
   }
   vector <vector <double> > A2 ( m, vector<double>(n) );
@@ -311,32 +288,31 @@ int Milp::simplex ( const vector <vector <double> > & A,  // constraint matrix
     copy ( A0[r].begin(), A0[r].end(), A2[r].begin() );
   copy ( B0.begin(), B0.end(), B2.begin() );
   for (int c=0; c<n; c++)
-    C2[c] = -C[c];                   // obj. vector should be negated
+    C2[c] = -C[c];
   obj = 0;
-  if (numBasicVar < m) {
-    int n1 = n;                      // Phase I need extra dummy variables
+  if (num_var_basic < m) {
+    int n1 = n;
     vector <vector <double> > A1 (m, vector<double>(n) );
     vector <double> B1 (m);
-    vector <double> C1 (n, 0);       // new objective vector for phase I
+    vector <double> C1 (n, 0);       // phase I new objective vector
  for (int r=0; r<m; r++)
       copy ( A0[r].begin(), A0[r].end(), A1[r].begin() );
-    copy ( B0.begin(), B0.end(), B1.begin() );  // r.h.s. is the same
+    copy ( B0.begin(), B0.end(), B1.begin() );
     for (int i=0; i<m; i++) {
-      if (BasicVarR[i] < 0) {
+      if (var_r[i] < 0) {
     for (int r=0; r<m; r++) {
       if (r == i) A1[r].push_back (1);
       else A1[r].push_back (0);
     }
     C1.push_back (1);
-    BasicVarR[i] = n1;
+    var_r[i] = n1;
     n1++;
       }
     }
-     C1.resize (n1, 1);                // Adjust sizes of objective vector
-canonicalize (A1, B1, C1, BasicVarR, obj);  // convert to canonical form
-    bool unbounded = pivoting (A1, B1, C1, BasicVarR, obj);  // pivoting
+     C1.resize (n1, 1);                //  objective vector size adjusted
+canonicalize (A1, B1, C1, var_r, obj);
+    bool unbounded = pivoting (A1, B1, C1, var_r, obj);  // pivoting
     if (unbounded) {
-      cout << "Unbounded Phase I!" << endl;
       exit (1);
     }    bool feasible = (fabs(obj) < EPS) ? true : false;
     if (!feasible) return 0;
@@ -346,10 +322,10 @@ canonicalize (A1, B1, C1, BasicVarR, obj);  // convert to canonical form
       B2[r] = B1[r];
     }
   }
-  canonicalize (A2, B2, C2, BasicVarR, obj);
-  bool unbounded = pivoting (A2, B2, C2, BasicVarR, obj);
+  canonicalize (A2, B2, C2, var_r, obj);
+  bool unbounded = pivoting (A2, B2, C2, var_r, obj);
  for (int r=0; r<m; r++)              // r.h.s. is the basic solution
-    X[BasicVarR[r]] = B2[r];
+    X[var_r[r]] = B2[r];
   return ( unbounded ? -1 : 1 );
 }
 
